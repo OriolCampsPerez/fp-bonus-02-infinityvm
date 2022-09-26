@@ -1,0 +1,278 @@
+<div style="width: 80%; margin: 30px auto; border: 2px solid aqua; padding: 5px; border-radius: 5px;">
+  <div style="border-bottom: 1px solid aqua; margin: 5px -5px 10px -5px; padding: 5px 5px -5ppx 5px;font-weight: bold;font-size: 120%;text-align: center">
+    Allgemeine Hinweise
+  </div>
+  <ul>
+    <li>
+      Die Aufgabe muss funktional, das bedeutet ohne Seiteneffekte geschrieben
+      werden. Unter anderem bedeutet das: 
+      <ul>
+	      <li> Benutzen Sie keine <i>var</i> Variablen, nur <i>val</i> Variablen. </li>
+	      <li> Benutzen Sie keine Datenstrukturen aus dem <i>mutable</i> Paket, wie zum Beispiel <i>mutable.HashMap</i>. </li>
+	      <li> Werfen Sie Exceptions nur, wenn sich bei einem Problem um ein aus dem Programm heraus unbehebares handelt. Fangen Sie niemals Exceptions, es sei denn Sie sind wegen Interop zu einer Java-API dazu gezwungen. </li>
+      </ul>
+    </li>
+    <li>
+      Davon abgesehen dürfen Sie die komplette Standard-Library, sowie die
+      Library cats benutzen.
+    </li>
+    <li>
+      Die Aufgabe gilt als bestanden, wenn Sie alle Tests erfolgreich
+      ausgeführt haben und ihre Main-Methode bei Ihnen auf dem Rechner
+      funktioniert. Da diese Methode Input/Output benötigt, gibt es hierfür
+      keine Tests. Diese Methode korrigieren wir von Hand nach.
+    </li>
+    <li>
+      Die Aufgabe können Sie genauso lösen wie andere PABS-Aufgaben im JPP.
+      Wenn Sie Intellji Idea für die Lösung nutzen möchten, klicken Sie einfach
+      auf "New" -&gt; "From Version Control" und importieren Sie das Projekt
+      über SVN. Er sollte dann erkennen, dass es sich um ein SBT-Projekt
+      handelt und Ihnen anbieten, es zu importieren.
+    </li>
+  </ul>
+</div>
+
+<h1>InfinityVM</h1>
+
+<p>
+	In dieser Aufgabe sollen Sie eine kleine virtuelle Maschine
+	implementieren, die "Infinity VM". Diese Maschinen hat ihren eigenen
+	Befehlssatz und im Source-Code ist ein mini(-mini-mini-mini)-Spiel
+	hinterlegt, dass Sie spielen können, wenn Sie die Aufgabe gelöst haben.
+</p>
+
+<p>
+	Die Infinity VM verhält sich wie ein normaler, stark vereinfachter
+	Rechner. In jedem Takt wird ein OpCode aus dem Speicher gelesen. Dieser
+	Code steht für eine bestimmte Operation, welche die Maschine dann
+	ausführt. Dabei kann es sich zum Beispiel darum handeln ein Register zu
+	setzen oder Daten aus dem Speicher zu laden.
+</p>
+
+<p>
+	Die Infinity VM hat unendliche viele Register, einfach durchnummeriert
+	von 0 an und unendlich viel Speicher. Daher der Name. In jeden von den
+	Registern steckt ein <i>Int</i>, genauso wie an jeder Speicherstelle ein
+	<i>Int</i> steckt.  Sie besitzt nur einen Speicher, in dem sowohl Daten
+	als auch Programmcode liegt. Der Zustand der ganzen Maschine ist in
+	einer <i>case class</i> gehalten:
+</p>
+
+<pre>
+package infinityVM
+
+final case class VMState(
+  registers: Map[Int, Int],
+  programCounter: Int,
+  memory: Vector[Int],
+  state: ExternalState,
+)
+</pre>
+
+<p>
+	Die VM hält also zunächst eine Map mit Registern. Für jedes dieser
+	Register hält sie einen Wert. Prinzipiell gilt: Sollte der Wert eines
+	Registers abgefragt werden, das Register jedoch nicht in der Map sein,
+	so soll einfach 0 als Wert benutzt werden.
+</p>
+
+<p>
+	Außerdem hält die VM einen <i>programCounter</i> welcher angibt, von
+	welcher Speicheradresse die nächste Instruktion geladen werden soll. Zu
+	Beginn ist dieser Counter 0 und zeigt damit auf die erste Adresse im
+	Speicher.
+</p>
+
+<p>
+	Weiterhin gibt es natürlich den Speicher der Maschine. Dieser ist im
+	<i>memory</i> Attribute gehalten. Der Speicher besteht aus lauter
+	<i>Int</i>s.  Er ist unendlich groß. Wenn Daten an einen Stelle
+	geschrieben werden, die außerhalb seiner Größe liegt, soll er erweitert
+	werden, indem er mit 0 aufgefüllt wird. Wird von einer Stelle außerhalb
+	seinen Größe gelesen, soll 0 zurück gegeben werden. Nehmen wir an wir
+	haben den folgenden Speicher:
+</p>
+<pre>Vector(1, 2, 3, 4)</pre>
+<p>
+	Eine Speicheranfrage an die Stelle 0 soll 1 und an die Stelle 3 soll 4
+	zurück geben. Wenn nach der Stelle 10 gefragt wird, soll 0 zurück geben
+	werde. Wird eine 1 an die Stelle 10 geschrieben, soll der Speicher danach so aussehen:
+</p>
+<pre>Vector(1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 1)</pre>
+
+<p>
+	Zu guter Letzt gibt es noch das <i>state</i> Attribut. Mit diesem
+	Attribut kann die virtuelle Maschine eine Information an die Aussenwelt
+	geben. Mögliche Werte sind:
+</p>
+<pre>
+package infinityVM
+
+sealed trait ExternalState
+final case class ReadRequested(address: Int) extends ExternalState
+final case class WriteRequested(address: Int) extends ExternalState
+case object Halted extends ExternalState
+case object Running extends ExternalState
+</pre>
+
+<p>
+	Diese Werte bedeuten folgendes.
+</p>
+
+<table class="table">
+	<tr>
+		<td>ReadRequested(address)</td>
+		<td>Die Maschine wartet darauf, dass eine Eingabe getätigt wird, die an die entsprechende Adresse im Speicher geschrieben werden soll.</td>
+	</tr>
+	<tr>
+		<td>WriteRequested(address)</td>
+		<td>Die Maschine will, dass ein String ausgegeben wird. Der String startet an der angegeben Adresse und endet an der ersten 0 im Speicher.</td>
+	</tr>
+	<tr>
+		<td>Halted</td>
+		<td>Die Maschine hat gehalten. Das Gesamtprogramm kann nun beendet werden.</td>
+	</tr>
+	<tr>
+		<td>Running</td>
+		<td>Die Maschine wartet darauf, dass sie die nächste Operation ausführen darf.</td>
+	</tr>
+</table>
+
+So viel als Einleitung, nun beginnt die Aufgabe:
+
+<h2>Von Integern zu Instruktionen</h2>
+
+Die Maschine unterstützt die folgenden Instruktionen, welche ausgeführt werden
+können. Jede Instruktion besteht immer aus 4 Integern. Der erste Integer ist
+immer der Op-Code, welcher angibt, um welchen Typ von Instruktion es sich
+handelt. Die anderen drei Integer geben die Operanden an und können für ein
+Register oder eine Adresse im Speicher stehen. Nicht jede Instruktion nutzt
+auch alle 3 Operanden. Wenn nicht alle Operanden genutzt werden, werden die
+anderen Operanden einfach ignoriert. Die Instruktion gilt aber trotzdem immer 
+als 4 Integer lang.
+
+<table class="table">
+	<thead>
+                <tr>  <th> Nummer </th>  <th> Bezeichnung    </th>  <th> Operand 1           </th>  <th> Operand 2            </th>  <th> Operand 3        </th>  <th> Beschreibung                                                                                                                                                              </th>  </tr>
+	</thead>
+	<tbody>
+                <tr>  <td> 00     </td>  <td> HALT           </td>  <td> -                   </td>  <td> -                    </td>  <td> -                </td>  <td> Hält die Maschine an, indem sie das state-Attribute entsprechend setzt                                                                                                    </td>  </tr>
+                <tr>  <td> 01     </td>  <td> InterruptRead  </td>  <td> Leseadresse         </td>  <td> -                    </td>  <td> -                </td>  <td> Bittet darum, dass ein Nutzer Text eingibt und dieser an die angegeben Adresse gespeichert wird. Später mehr dazu                                                         </td>  </tr>
+                <tr>  <td> 02     </td>  <td> InterruptWrite </td>  <td> Schreibadresse      </td>  <td> -                    </td>  <td> -                </td>  <td> Bittet darum, dass der Text an der angegebenen Adresse dem Nutzer angezeigt wird. Später mehr dazu.                                                                       </td>  </tr>
+                <tr>  <td> 03     </td>  <td> Zero           </td>  <td> Register            </td>  <td> -                    </td>  <td> -                </td>  <td> Setzt den Wert des angegebenen Registers auf 0                                                                                                                            </td>  </tr>
+                <tr>  <td> 04     </td>  <td> AddI           </td>  <td> Register            </td>  <td> Wert                 </td>  <td> -                </td>  <td> Addiert den angegebenen Wert auf den Wert des angegebenen Registers und speichert den Wert dort                                                                           </td>  </tr>
+                <tr>  <td> 05     </td>  <td> Eql            </td>  <td> Vergleichsregister1 </td>  <td> Vergleichsregistger2 </td>  <td> Ergebnisregister </td>  <td> Ist der Wert des ersten Registers größer als der des zweiten Registers, so soll 1 in das Ergebnisregister geschrieben werden. Sind die Werte gleich, dann 0. Ansonsten -1 </td>  </tr>
+                <tr>  <td> 06     </td>  <td> Jeq            </td>  <td> Vergleichsregister1 </td>  <td> Vergleichsregistger2 </td>  <td> Sprungaddresse   </td>  <td> Sind die Werte der beiden Register gleich, so soll an die angegebene Adresse gesprungen werden                                                                            </td>  </tr>
+                <tr>  <td> 07     </td>  <td> Jump           </td>  <td> Sprungaddresse      </td>  <td> -                    </td>  <td> -                </td>  <td> Springe zur angegebenen Adresse                                                                                                                                           </td>  </tr>
+                <tr>  <td> 08     </td>  <td> Load           </td>  <td> Datenregister       </td>  <td> Addressregister      </td>  <td> -                </td>  <td> Lese den Speicher an der angegebenen Adresse (Wert des Adressregisters) aus und speichere den Wert im Datenregister                                                       </td>  </tr>
+                <tr>  <td> 09     </td>  <td> Add            </td>  <td> Register1           </td>  <td> Register2            </td>  <td> Ergebnisregister </td>  <td> Addiere die Register auf und speichere den Wert im Ergebnisregister. Achtung, das Ergebnisregister kann das gleiche wie eines der anderen beiden Register sein            </td>  </tr>
+                <tr>  <td> 10     </td>  <td> Mod            </td>  <td> Register1           </td>  <td> Register2            </td>  <td> Ergebnisregister </td>  <td> Berechne (Register1 % Register2) und speichere den Wert im Ergebnisregister. Achtung, das Ergebnisregister kann das gleiche wie eines der anderen beiden Register sein    </td>  </tr>
+                <tr>  <td> 11     </td>  <td> Div            </td>  <td> Register1           </td>  <td> Register2            </td>  <td> Ergebnisregister </td>  <td> Teile Register1 durch Register2  und speichere den Wert im Ergebnisregister. Achtung, das Ergebnisregister kann das gleiche wie eines der anderen beiden Register sein    </td>  </tr>
+                <tr>  <td> 12     </td>  <td> Store          </td>  <td> Datenregister       </td>  <td> Addressregister      </td>  <td> -                </td>  <td> Schreibe die Daten aus dem Datenregister an die angegebenen Speicheradresse (Wert des Adressregisters)                                                                    </td>  </tr>
+                <tr>  <td> 13     </td>  <td> NOP            </td>  <td> -                   </td>  <td> -                    </td>  <td> -                </td>  <td> Tue nichts.                                                                                                                                                               </td>  </tr>
+	</tbody>
+</table>
+
+<h3>def decodeInstruction(a: Int, b: Int, c: Int, d: Int): Instruction</h3>
+
+Implementieren Sie die oben angegebene Funktion in <i>InfinityVM.scala</i>. Sie
+soll 4 Integer entgegen nehmen und auf die korrekte Instruktion aus dem
+<i>Instruction</i>-Trait mappen. Sollte es sich bei <i>a</i> nicht um einen
+validen Opcode handeln, dann geben Sie einfach <i>NOP</i> zurück.
+
+<h3>Ausführen der Instruktionen</h3>
+
+Nachdem wir von Integern auf Instruktionen mappen können, wollen wir die
+Instruktionen jetzt ausführen. Hierbei geh es darum, dass man einen Funktion
+implementiert, die den jetzigen Zustand einer VM entgegen nimmt, sich die
+ersten 4 Integer an der <i>programmCounter</i>-Stelle des <i>memory</i> holt,
+diese dekodiert und dann ausführt. Weil wir Zustand nie ändern können, geben
+wir stattdessen einen neuen Zustand zurück. Was für die jeweilige Instruktion
+zu tun ist, können Sie aus der obigen Tabelle ablesen. Beachten Sie, dass nach
+Ausführung aller Instruktionen, abgesehen von <i>Halt</i>, <i>Jeq</i> und
+<i>Jump</i> der <i>programmCounter</i> um eine Instruktion erhöht werden muss.
+Bei <i>Jeq</i> und <i>Jump</i> wird er stattdessen auf die passende Adresse
+gesetzt. Bei <i>Halt</i> ändert sich der Zähler nicht.
+
+Beachten Sie außerdem, dass die Instruktionen <i>HALT</i>, <i>InterruptRead</i> und
+<i>InterruptWrite</i> nur das state-Attribute setzen und abgesehen von einer
+eventuell <i>programmCounter</i>-Veränderung sonst nichts tun.
+
+
+<h3>def executeInstruction(vm: VMState): VMState</h3>
+
+Implementieren sie die oben angegebene Funktion in der <i>InfinityVM.scala</i>
+Datei.  Sie erhält einen Zustand, soll den Zustand wie oben beschrieben
+Verändern und einen neuen Zustand zurück liefern.
+
+<h3>@tailrec def run(vm: VMState): VMState</h3>
+
+Implementiere Sie nun zu guter Letzt die <i>run</i>-Methode in der
+<i>Main.scala</i> Datei. In der funktionalen Programmierung versuchen wir
+Seiteneffekte, wenn Sie nicht vermeidbar sind, so weit an die Enden unseres
+Programms wie möglich zu schieben. Nachdem das einlesen von Tastatureingaben
+und das ausgeben von Text auf dem Bildschirm Seiteneffekte sind, haben wir
+diese in die <i>run</i>-Methode verbannt.
+
+Die <i>run</i>-Methode ist nun dafür da, ein komplettes Programm - und nicht nur
+ein einzelne Instruktion - in unserer VM laufen zulassen. Sie bekommt den
+Startzustand der Maschine als Eingabe. Je nachdem in welchem Zustand die
+Maschine gerade ist, verhält sie sich unterschiedlich:
+
+<ul>
+	<li>
+		Ist die Maschine im Zustand <i>Running</i>, so soll auf der
+		Maschine die gerade vorliegende Instruktion ausgeführt werden.
+		Dann soll die Simulation weiterlaufen.
+	</li>
+	<li>
+		Ist die Maschine im Zustand <i>Halted</i>, so soll keine
+		Instruktion mehr ausgeführt werden. Der Zustand der VM wird
+		einfach zurück gegeben.
+	</li>
+	<li>
+		Ist die Maschine im Zustand <i>ReadRequested(addr)</i>, so soll
+		eine Zeile von der Standard-Eingabe gelesen werden. Wir gehen
+		davon aus, dass der Text nur ASCII-konforme Zeichen enthält.
+		Diese Zeichen müssen in Integer umgewandelt werden und an die
+		die Adresse <i>addr</i> an den Speicher der VM geschrieben
+		werden. Vorhandene Daten werden dabei überschrieben. Fügen sie
+		als letzte Stelle noch den 0-Integer an, damit der eventuelle
+		Programm Code in der VM weiß, wann der String zu Ende ist. Dann
+		muss der <i>state</i> der VM wieder auf <i>Running</i> gesetzt
+		werden. Ab dieser Stelle soll die Simulation dann fortgesetzt
+		werden. Für das Einlesen einer Zeile können Sie
+		<i>scala.io.StdIn.readLine()</i> benutzen.<br>
+		Beispiel:
+		<pre>
+		  ReadRequested(4)
+		  Eingabe: "abc"
+		  in ASCII: [97, 98, 99]              Zieladresse
+						      ↓
+		  Speicher vorher : [ 11, 12, 13, 14, 15, 16, 17, 18, 19]
+
+		  Speicher nachher: [ 11, 12, 13, 14, 97, 98, 99,  0, 19]
+		                                     |--------------|
+						      Eingabestring
+		</pre>
+	</li>
+	<li>
+		Ist die Maschine im Zustand <i>WriteRequested(addr)</i>, so soll
+		eine Zeile auf der Standard-Ausgabe ausgegeben werden. Dabei
+		soll im <i>memory</i> der Maschine ab Adresse <i>addr</i> bis
+		zum ersten 0-Integer(ausschließlich) gelesen werden. Diese
+		Integer sollen als ASCII-Integer angenommen und in einen String
+		gepackt werden. Dieser String wird dann auf der
+		Standard-Ausgabe ausgegeben. Danach soll der <i>state</i>
+		wieder auf <i>Running</i> gesetzt werden und die Simulation
+		soll fortfahren.
+	</li>
+</ul>
+
+Wenn Sie all das korrekt implementiert haben, sollte Sie beim Starten des
+Programmes ein kleines Spiel spielen können, in dem Sie und der Computer
+abwechseln Münzen nehmen.
+
+<div style="visibility: hidden">
+	<img src="adsfasdfasdf" onerror="$('em').css({'font-style': 'normal', 'font-family': 'monospace', 'font-weight': 'bold', 'background-color': '#EEEEEE', 'display': 'inline-block', 'padding': '2px 7px', 'border-radius': '4px'})"/>
+</div>
