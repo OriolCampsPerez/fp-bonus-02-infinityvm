@@ -7,7 +7,6 @@ import cats.data.*
 import cats.implicits.given
 import scala.annotation.tailrec
 
-// remove comment when implemented to check for tail recursiveness
 @tailrec
 def run(vm: VMState): VMState = vm.state match
   case ExternalState.Running => run(executeInstruction(vm))
