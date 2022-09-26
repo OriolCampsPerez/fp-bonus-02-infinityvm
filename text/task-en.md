@@ -1,15 +1,5 @@
----
-title: "Bonus Exercise: InfinityVM"
-lang: "en"
-colorlinks: true
-header-includes:
-- |
-  ```{=latex}
-  \usepackage{pdflscape}
-  \newcommand{\blandscape}{\begin{landscape}}
-  \newcommand{\elandscape}{\end{landscape}}
-    ```
-...
+
+# InfinityVM
 
 ### General notes
 
